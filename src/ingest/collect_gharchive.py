@@ -17,11 +17,7 @@ def download_monthly_samples():
     target_hour = "15" # UTC 15시 (한국 시간 자정)
     target_day = "02"  # 신년/휴일 노이즈 회피를 위한 2일 고정
 
-    print("==================================================")
-    print("🚀 GH Archive 매월 2일 샘플링 파이프라인 가동")
-    print("==================================================")
-
-    for year in range(2022, current_year + 1):
+    for year in range(2026, current_year + 1):
         # 2026년은 현재 월(5월)까지만 돌고, 나머지는 12월까지 순회
         end_month = current_month if year == current_year else 12
         
@@ -31,7 +27,6 @@ def download_monthly_samples():
             url = f"https://data.gharchive.org/{file_name}"
             output_path = os.path.join(target_dir, file_name)
 
-            # 이미 다운로드한 파일이 있다면 스킵 (네트워크 비용 절감 및 멱등성 보장)
             if os.path.exists(output_path):
                 print(f"[SKIP] 이미 존재하는 파일입니다: {file_name}")
                 continue
@@ -45,7 +40,6 @@ def download_monthly_samples():
                                 if chunk:
                                     f.write(chunk)
                         print(f"[SUCCESS] 적재 완료: {file_name}")
-                        # 깃허브 아카이브 서버 디도스 방지 및 안정적인 수집을 위한 미세 딜레이
                         time.sleep(0.5)
                     else:
                         print(f"[WARN] 데이터를 찾을 수 없습니다 (HTTP {response.status_code}): {file_name}")
