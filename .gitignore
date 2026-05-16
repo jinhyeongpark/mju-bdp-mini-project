@@ -1,0 +1,16 @@
+# 대용량 로업 데이터 및 압축 파일 제외
+*.json
+*.json.gz
+*.csv
+
+# 파이썬 캐시 및 가상환경 제외
+__pycache__/
+.venv/
+venv/
+
+# GitHub 개인 API 토큰 및 설정 파일 제외
+.env
+secret.txt
+
+# AI 디버깅 지침
+.claude/
