@@ -47,6 +47,9 @@ fi
 
 # 5. 데이터 웨어하우스 적재 및 시계열 집계 (Apache Hive) - HDFS 데이터 읽기 / 로컬 summary 쓰기
 echo "Executing Hive analysis..."
+
+hdfs dfs -chmod -R 777 /user/maria_dev/processed
+
 if command -v hive &> /dev/null
 then
     hive -f src/analyze/hive_analysis.hql
