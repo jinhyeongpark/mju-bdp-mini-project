@@ -4,10 +4,6 @@ import requests
 from datetime import datetime
 
 def download_monthly_samples():
-    """
-    2022년부터 2026년 현재(5월)까지 매월 2일 15시(UTC)의 GH Archive 데이터를
-    자동으로 순회하며 스트리밍 방식으로 다운로드합니다.
-    """
     target_dir = "./data/raw"
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
@@ -31,7 +27,7 @@ def download_monthly_samples():
                 print(f"[SKIP] 이미 존재하는 파일입니다: {file_name}")
                 continue
 
-            print(f"[INGEST] 다운로드 중... ➔ {file_name}")
+            print(f"다운로드 중: {file_name}")
             try:
                 with requests.get(url, stream=True, timeout=30) as response:
                     if response.status_code == 200:
@@ -39,14 +35,14 @@ def download_monthly_samples():
                             for chunk in response.iter_content(chunk_size=1024 * 1024):
                                 if chunk:
                                     f.write(chunk)
-                        print(f"[SUCCESS] 적재 완료: {file_name}")
+                        print(f"완료: {file_name}")
                         time.sleep(0.5)
                     else:
                         print(f"[WARN] 데이터를 찾을 수 없습니다 (HTTP {response.status_code}): {file_name}")
             except Exception as e:
                 print(f"[ERROR] {file_name} 수집 중 장애 발생: {e}")
 
-    print("\n[FINISHED] 모든 시점의 Raw 데이터 수집 작업이 완료되었습니다!")
+    print("수집 완료")
 
 if __name__ == "__main__":
     download_monthly_samples()
