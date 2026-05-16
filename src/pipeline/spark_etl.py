@@ -22,15 +22,16 @@ def run_spark_etl():
     spark = create_spark_session()
 
     raw_dir = "./data/raw"
-    metadata_files = glob.glob("./data/metadata_master_*.json")
-    output_path = "./data/processed"
+    output_path = f"file://{os.path.abspath('./data/processed')}"
 
     # 1. Raw 데이터 로드
-    raw_files = glob.glob(os.path.join(raw_dir, "*.json.gz"))
+    local_raw_files = glob.glob(os.path.join(raw_dir, "*.json.gz"))
     if not raw_files:
         print("입력 데이터가 없습니다. 수집기를 먼저 실행하세요.")
         spark.stop()
         return
+
+    raw_df = [f"file://{os.path.abspath(f)}" for f in local_raw_files]
 
     print(f"압축 파일 {len(raw_files)}개 로드 중...")
     raw_df = spark.read.json(raw_files)
@@ -50,6 +51,8 @@ def run_spark_etl():
     if not metadata_files:
         meta_df = spark.createDataFrame([], schema="repo_name STRING, head_sha STRING, commit_message STRING, author_email STRING, primary_language STRING")
     else:
+        metadata_files = [f"file://{os.path.abspath(f)}" for f in local_metadata_files]
+        print(f"메타데이터 파일 로드 중: {metadata_files}")
         meta_df = spark.read.option("multiLine", "true").json(metadata_files) \
                        .select("repo_name", "commit_message", "author_email", "primary_language")
 
