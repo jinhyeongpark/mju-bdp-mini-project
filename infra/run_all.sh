@@ -7,11 +7,11 @@ echo "Starting data pipeline process..."
 
 # 1. Raw 데이터 수집 (GH Archive) - 로컬 적재
 echo "Executing data ingestion..."
-python3 src/ingest/collect_gharchive.py
+python3.6 src/ingest/collect_gharchive.py
 
 # 2. 외부 메타데이터 보강 (GitHub REST API) - 로컬 적재
 echo "Executing metadata enrichment..."
-python3 src/ingest/fetch_metadata.py
+python3.6 src/ingest/fetch_metadata.py
 
 # 3. 분산 정제 및 조인 (Apache Spark Job) - 로컬 읽기 / 로컬 쓰기
 echo "Executing Spark ETL processing via spark-submit..."
@@ -48,6 +48,6 @@ fi
 
 # 6. 최종 데이터 시각화 차트 생성 - 로컬 summary 읽기
 echo "Generating trend visualization chart..."
-python3 src/analyze/plot_trends.py
+python3.6 src/analyze/plot_trends.py
 
 echo "Pipeline process completed successfully."
