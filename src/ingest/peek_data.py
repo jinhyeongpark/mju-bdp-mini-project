@@ -1,7 +1,7 @@
 import gzip
 import json
 
-file_path = "./data/raw/2022-01-02-15.json.gz"
+file_path = "./data/raw/2022-01-01-15.json.gz"
 
 print("[INFO] PushEvent 샘플 탐색 중...")
 
