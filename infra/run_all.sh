@@ -19,6 +19,10 @@ python3.6 src/ingest/fetch_metadata.py
 
 # 3. 분산 정제 및 조인 (Apache Spark Job) - 로컬 읽기 / 로컬 쓰기
 echo "Executing Spark ETL processing via spark-submit..."
+
+export PYSPARK_PYTHON=/usr/bin/python3.6
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
+
 spark-submit src/pipeline/spark_etl.py
 
 # 4. HDFS 데이터 적재 (스파크 정제 결과물을 하둡으로 업로드)
