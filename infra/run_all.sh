@@ -3,6 +3,10 @@
 
 set -e
 
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export PYTHONIOENCODING=utf-8
+
 echo "Starting data pipeline process..."
 
 # 1. Raw 데이터 수집 (GH Archive) - 로컬 적재
