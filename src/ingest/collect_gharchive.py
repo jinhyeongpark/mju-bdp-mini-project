@@ -13,7 +13,7 @@ def download_monthly_samples():
     target_hour = "15" # UTC 15시 (한국 시간 자정)
     target_day = "02"  # 신년/휴일 노이즈 회피를 위한 2일 고정
 
-    for year in range(2026, current_year + 1):
+    for year in range(2022, current_year + 1):
         # 2026년은 현재 월(5월)까지만 돌고, 나머지는 12월까지 순회
         end_month = current_month if year == current_year else 12
         
