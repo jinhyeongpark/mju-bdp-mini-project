@@ -51,11 +51,19 @@ echo "Executing Hive analysis..."
 if command -v hdfs &> /dev/null
 then
     hdfs dfs -chmod -R 777 /user/maria_dev/processed
+    # 멱등성 보장을 위해 이전 하이브 임시 파일이 있다면 미리 삭제
+    hdfs dfs -rm -r -f /tmp/ai_project_summary || true
 fi
 
 if command -v hive &> /dev/null
 then
     hive -f src/analyze/hive_analysis.hql
+    
+    # Hive가 HDFS /tmp에 안전하게 연산해 둔 결과물을 리눅스 로컬 프로젝트 폴더로 가로채기
+    echo "Downloading Hive results from HDFS to local data/summary directory..."
+    mkdir -p ./data/summary
+    rm -rf ./data/summary/*
+    hdfs dfs -get /tmp/ai_project_summary/* ./data/summary/
 else
     echo "Warning: Hive command not found. Skipping Hive execution."
 fi
