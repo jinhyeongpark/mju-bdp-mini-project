@@ -18,7 +18,7 @@ mysql -h${DB_HOST} -u${DB_USER} -p${DB_PASS} -D${DB_NAME} -e "
 CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
     year VARCHAR(4) NOT NULL,
     month VARCHAR(2) NOT NULL,
-    primary_language VARCHAR(50) NOT NULL, 
+    primary_language VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, 
     total_commits INT,
     unique_repos INT,
     ai_commits INT,
@@ -34,15 +34,20 @@ CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
 
 mysql -h${DB_HOST} -u${DB_USER} -p${DB_PASS} -D${DB_NAME} -e "TRUNCATE TABLE ${TABLE_NAME};"
 
+sed -i '/^$/d' ${LOCAL_DATA_DIR}/* 2>/dev/null || true
+
 hdfs dfs -rm -r -f ${HDFS_TEMP_DIR}
 hdfs dfs -mkdir -p ${HDFS_TEMP_DIR}
 hdfs dfs -put ${LOCAL_DATA_DIR}/* ${HDFS_TEMP_DIR}/
+
+rm -f ./${TABLE_NAME}.java ./${TABLE_NAME}.class ./${TABLE_NAME}.jar
 
 sqoop export \
   --connect "jdbc:mysql://${DB_HOST}/${DB_NAME}?useSSL=false" \
   --username "${DB_USER}" \
   --password "${DB_PASS}" \
   --table "${TABLE_NAME}" \
+  --columns "year,month,primary_language,total_commits,unique_repos,ai_commits,feat_commits,fix_commits,refactor_commits,docs_commits,chore_commits" \
   --export-dir "${HDFS_TEMP_DIR}" \
   --input-fields-terminated-by ',' \
   --input-lines-terminated-by '\n' \
