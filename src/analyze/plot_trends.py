@@ -1,48 +1,93 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import pymysql
 
-def generate_trend_chart():
+def generate_trend_charts():
     """
-    하이브 집계 데이터를 읽어 연월별 AI 커밋 비중 추이 그래프를 생성합니다.
+    MySQL RDBMS에서 실제 데이터를 조회하여 과제 요건 충족을 위한 3가지 차트를 생성합니다.
+    1) 월별 주요 언어별 AI 커밋 비중 추이 (다중 선 그래프)
+    2) 전체 AI 커밋 중 언어별 점유율 비중 (파이 차트)
+    3) AI 에이전트의 주요 작업 성격별 분포 (막대 그래프) -> 과제 질문 3번 해결책
     """
-    summary_dir = "./data/summary"
-    output_image_path = "./data/ai_agent_trend.png"
+    output_image_path1 = "./data/ai_agent_lang_trend.png"
+    output_image_path2 = "./data/ai_agent_share_pie.png"
+    output_image_path3 = "./data/ai_agent_task_type.png" 
     
-    # 1. 데이터 로드 및 예외 처리
-    if os.path.exists(summary_dir) and os.listdir(summary_dir):
-        # 하이브 출력 파일 탐색 (보통 000000_0 포맷)
-        files = [os.path.join(summary_dir, f) for f in os.listdir(summary_dir) if os.path.isfile(os.path.join(summary_dir, f))]
-        df = pd.read_csv(files[0], names=["year", "month", "total_commits", "ai_commits"])
-    else:
-        # 시계열 추이 검증을 위한 2022~2026 더미 데이터
-        dummy_data = {
-            "year":  [2022, 2023, 2024, 2025, 2026, 2026],
-            "month": ["01", "01", "01", "01", "04", "05"],
-            "total_commits": [1000, 1200, 1500, 1800, 2000, 2200],
-            "ai_commits": [0, 5, 45, 90, 160, 176] # 우리가 확인한 2026년 8% 비중 반영
-        }
-        df = pd.DataFrame(dummy_data)
+    db_host = "localhost"
+    db_user = "root"
+    db_pass = "hadoop"
+    db_name = "mju_analytics"
+    table_name = "ai_agent_lang_trends"
+    
+    print("MySQL RDBMS로부터 실데이터 조회를 시작합니다...")
+    
+    conn = pymysql.connect(host=db_host, user=db_user, password=db_pass, database=db_name, charset='utf8mb4')
+    query = f"SELECT * FROM {table_name}" 
+    df = pd.read_sql(query, conn)
+    conn.close()
+    
+    if df.empty:
+        raise ValueError(f"에러: MySQL {table_name} 테이블에 데이터가 없습니다.")
 
-    # 2. 분석 지표 계산 (AI 커밋 비중 %)
-    df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+    df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
     df["ai_ratio"] = (df["ai_commits"] / df["total_commits"]) * 100
+    df = df.sort_values(by=["date", "primary_language"])
+    os.makedirs("./data", exist_ok=True)
 
-    # 3. 데이터 시각화 (선 그래프)
-    plt.figure(figsize=(10, 6))
-    plt.plot(df["date"], df["ai_ratio"], marker="o", color="b", linestyle="-", linewidth=2)
-    
-    plt.title("AI Agent Commit Ratio Trend (2022 - 2026)", fontsize=14, pad=15)
+    plt.figure(figsize=(12, 6))
+    languages = df["primary_language"].unique()
+    for lang in languages:
+        lang_df = df[df["primary_language"] == lang]
+        plt.plot(lang_df["date"], lang_df["ai_ratio"], marker="o", label=lang, linewidth=2)
+    plt.title("AI Agent Commit Ratio Trend by Language (2022 - 2026)", fontsize=14, pad=15)
     plt.xlabel("Timeline (Year-Month)", fontsize=12)
     plt.ylabel("AI Commit Ratio (%)", fontsize=12)
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.xticks(rotation=45)
+    plt.legend(title="Programming Languages", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
+    plt.savefig(output_image_path1)
+    plt.close()
+    print(f"[시각화 1] 완료: {output_image_path1}")
 
-    # 4. 결과 저장
-    os.makedirs(os.path.dirname(output_image_path), exist_ok=True)
-    plt.savefig(output_image_path)
-    print(f"시계열 트렌드 차트 저장 완료: {output_image_path}")
+    plt.figure(figsize=(8, 8))
+    lang_summary = df.groupby("primary_language")["ai_commits"].sum().reset_index()
+    lang_summary = lang_summary[lang_summary["ai_commits"] > 0]
+    if not lang_summary.empty:
+        plt.pie(lang_summary["ai_commits"], labels=lang_summary["primary_language"], autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
+        plt.title("Overall AI Agent Commits Share by Language", fontsize=14, pad=15)
+        plt.tight_layout()
+        plt.savefig(output_image_path2)
+        plt.close()
+        print(f"[시각화 2] 완료: {output_image_path2}")
+
+    plt.figure(figsize=(10, 6))
+    
+    task_types = {
+        "Feature (기능개발)": df["feat_commits"].sum(),
+        "Bug Fix (버그수정)": df["fix_commits"].sum(),
+        "Refactoring (코드정제)": df["refactor_commits"].sum(),
+        "Documentation (문서)": df["docs_commits"].sum(),
+        "Chore/Others (기타)": df["chore_commits"].sum()
+    }
+    
+    task_df = pd.DataFrame(list(task_types.items()), columns=["Task Type", "Count"]).sort_values(by="Count", ascending=False)
+    
+    bars = plt.bar(task_df["Task Type"], task_df["Count"], color=plt.cm.Accent.colors[:len(task_df)])
+    
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval + (yval*0.01), f'{int(yval):,}', ha='center', va='bottom', fontsize=10, weight='bold')
+
+    plt.title("Distribution of AI Agent Commit Task Types", fontsize=14, pad=15)
+    plt.xlabel("Task Characteristics", fontsize=12)
+    plt.ylabel("Number of Commits", fontsize=12)
+    plt.grid(True, axis='y', linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(output_image_path3)
+    plt.close()
+    print(f"[시각화 3] 완료: {output_image_path3}")
 
 if __name__ == "__main__":
-    generate_trend_chart()
+    generate_trend_charts()
