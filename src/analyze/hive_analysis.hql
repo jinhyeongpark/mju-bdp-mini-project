@@ -40,7 +40,7 @@ WITH ai_classified_commits AS (
     FROM default.github_enriched
     WHERE primary_language IS NOT NULL AND primary_language != 'Unknown'
 )
-INSERT OVERWRITE LOCAL DIRECTORY '/home/maria_dev/mju-bdp-mini-project/data/summary'
+INSERT OVERWRITE DIRECTORY '/tmp/ai_project_summary'
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 SELECT 
