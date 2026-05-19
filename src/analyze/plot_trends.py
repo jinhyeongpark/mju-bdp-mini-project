@@ -7,7 +7,7 @@ import pymysql
 def generate_trend_charts():
     output_image_path1 = "./data/ai_agent_lang_trend.png"
     output_image_path2 = "./data/ai_agent_share_pie.png"
-    output_image_path3 = "./data/ai_agent_task_type.png"
+    output_image_path3 = "./data/ai_agent_activity_vs_ai.png"
 
     db_host = "localhost"
     db_user = "root"
@@ -33,28 +33,39 @@ def generate_trend_charts():
     df["date"] = pd.to_datetime(
         df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2) + "-01"
     )
-    df["ai_ratio"] = (df["ai_commits"] / df["total_commits"]) * 100
     df = df.sort_values(by=["date", "primary_language"])
     os.makedirs("./data", exist_ok=True)
 
+    # --- Chart 1: Language commit share (%) over time ---
+    monthly = df.groupby(["date", "primary_language"])["total_commits"].sum().reset_index()
+    monthly_total = monthly.groupby("date")["total_commits"].sum().rename("month_total")
+    monthly = monthly.join(monthly_total, on="date")
+    monthly["share"] = monthly["total_commits"] / monthly["month_total"] * 100
+
+    # Top 8 languages by total commit volume
+    lang_volume = monthly.groupby("primary_language")["total_commits"].sum()
+    top_langs = lang_volume.nlargest(8).index.tolist()
+    plot_df = monthly[monthly["primary_language"].isin(top_langs)]
+
     fig, ax = plt.subplots(figsize=(14, 6))
-    languages = df["primary_language"].unique()
-    for lang in languages:
-        lang_df = df[df["primary_language"] == lang].sort_values("date")
-        ax.plot(lang_df["date"], lang_df["total_commits"], marker="o", label=lang, linewidth=2, markersize=4)
-    ax.set_title("Commit Trend by Language (2022 - 2026)", fontsize=14, pad=15)
-    ax.set_xlabel("Timeline (Year-Month)", fontsize=12)
-    ax.set_ylabel("Total Commits", fontsize=12)
+    for lang in top_langs:
+        lang_df = plot_df[plot_df["primary_language"] == lang].sort_values("date")
+        ax.plot(lang_df["date"], lang_df["share"], marker="o", label=lang, linewidth=2, markersize=4)
+
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     plt.xticks(rotation=45, ha="right")
+    ax.set_xlabel("Timeline (Year-Month)", fontsize=12)
+    ax.set_ylabel("Commit Share (%)", fontsize=12)
+    ax.set_title("Language Commit Share Trend (2022 - 2026)", fontsize=14)
+    ax.legend(title="Language", bbox_to_anchor=(1.01, 1), loc='upper left')
     ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend(title="Programming Languages", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
-    plt.savefig(output_image_path1)
+    plt.savefig(output_image_path1, bbox_inches="tight")
     plt.close()
     print(f"[Chart 1] Saved: {output_image_path1}")
 
+    # --- Chart 2: AI repo language distribution pie ---
     lang_csv = pd.read_csv("./data/ai_repos_with_lang.csv")
     lang_summary = lang_csv.groupby("primary_language")["ai_pr_count"].sum().reset_index()
     lang_summary = lang_summary[lang_summary["ai_pr_count"] > 0]
@@ -76,27 +87,33 @@ def generate_trend_charts():
         plt.close()
         print(f"[Chart 2] Saved: {output_image_path2}")
 
-    plt.figure(figsize=(10, 6))
-    task_types = {
-        "Feature": df["feat_commits"].sum(),
-        "Bug Fix": df["fix_commits"].sum(),
-        "Refactoring": df["refactor_commits"].sum(),
-        "Documentation": df["docs_commits"].sum(),
-        "Chore/Others": df["chore_commits"].sum()
-    }
-    task_df = pd.DataFrame(list(task_types.items()), columns=["Task Type", "Count"]).sort_values(by="Count", ascending=False)
-    bars = plt.bar(task_df["Task Type"], task_df["Count"], color=plt.cm.Accent.colors[:len(task_df)])
-    for bar in bars:
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2.0, yval + (yval*0.01), f'{int(yval):,}', ha='center', va='bottom', fontsize=10, weight='bold')
-    plt.title("Distribution of AI Agent Commit Task Types", fontsize=14, pad=15)
-    plt.xlabel("Task Characteristics", fontsize=12)
-    plt.ylabel("Number of Commits", fontsize=12)
-    plt.grid(True, axis='y', linestyle="--", alpha=0.6)
-    plt.tight_layout()
-    plt.savefig(output_image_path3)
-    plt.close()
-    print(f"[Chart 3] Saved: {output_image_path3}")
+    # --- Chart 3: Scatter — commit activity (Hive/MySQL) vs AI adoption (BigQuery/GitHub API) ---
+    activity = df.groupby("primary_language")["total_commits"].sum().reset_index()
+    activity.columns = ["primary_language", "total_commits"]
+
+    ai_adopt = lang_csv.groupby("primary_language")["ai_pr_count"].sum().reset_index()
+    ai_adopt.columns = ["primary_language", "ai_pr_count"]
+
+    merged = activity.merge(ai_adopt, on="primary_language", how="inner")
+    merged = merged[(merged["total_commits"] > 0) & (merged["ai_pr_count"] > 0)]
+
+    if not merged.empty:
+        fig, ax = plt.subplots(figsize=(10, 7))
+        ax.scatter(merged["total_commits"], merged["ai_pr_count"], s=90, color="steelblue", zorder=3)
+        for _, row in merged.iterrows():
+            ax.annotate(row["primary_language"],
+                        xy=(row["total_commits"], row["ai_pr_count"]),
+                        xytext=(5, 5), textcoords="offset points", fontsize=9)
+        ax.set_xlabel("Total Commits — GH Archive (Hive Aggregated)", fontsize=11)
+        ax.set_ylabel("AI-related PR Count — BigQuery / GitHub API", fontsize=11)
+        ax.set_title("Language Activity vs AI Adoption", fontsize=14)
+        ax.grid(True, linestyle="--", alpha=0.6)
+        plt.tight_layout()
+        plt.savefig(output_image_path3, bbox_inches="tight")
+        plt.close()
+        print(f"[Chart 3] Saved: {output_image_path3}")
+    else:
+        print("[Chart 3] No overlapping languages between datasets. Skipping.")
 
 if __name__ == "__main__":
     generate_trend_charts()
