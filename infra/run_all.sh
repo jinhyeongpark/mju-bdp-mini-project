@@ -72,7 +72,11 @@ echo "Executing Sqoop pipeline to RDBMS..."
 chmod +x src/analyze/export_to_rdbms.sh
 ./src/analyze/export_to_rdbms.sh
 
-# 6. 최종 데이터 시각화 차트 생성 - 로컬 summary 읽기
+# 6. GitHub API로 AI 레포 언어 수집 (차트 2용)
+echo "Fetching repository languages from GitHub API..."
+python3.6 src/analyze/fetch_repo_languages.py
+
+# 7. 최종 데이터 시각화 차트 생성 - 로컬 summary 읽기
 echo "Generating trend visualization chart..."
 python3.6 -m pip install pymysql --quiet 2>/dev/null || true
 PYTHONIOENCODING=utf-8 python3.6 src/analyze/plot_trends.py
