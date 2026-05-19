@@ -37,21 +37,50 @@ def generate_trend_charts():
     df = df.sort_values(by=["date", "primary_language"])
     os.makedirs("./data", exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(14, 6))
+    BREAK_LOW = 2000
+    BREAK_HIGH = 3000
+    max_val = df["total_commits"].max()
+
+    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(14, 8), sharex=True,
+                                          gridspec_kw={"height_ratios": [1, 3], "hspace": 0.05})
     languages = df["primary_language"].unique()
     for lang in languages:
         lang_df = df[df["primary_language"] == lang].sort_values("date")
-        ax.plot(lang_df["date"], lang_df["total_commits"], marker="o", label=lang, linewidth=2, markersize=4)
-    ax.set_title("Commit Trend by Language (2022 - 2026)", fontsize=14, pad=15)
-    ax.set_xlabel("Timeline (Year-Month)", fontsize=12)
-    ax.set_ylabel("Total Commits", fontsize=12)
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        ax_top.plot(lang_df["date"], lang_df["total_commits"], marker="o", label=lang, linewidth=2, markersize=4)
+        ax_bot.plot(lang_df["date"], lang_df["total_commits"], marker="o", label=lang, linewidth=2, markersize=4)
+
+    ax_top.set_ylim(BREAK_HIGH, max_val * 1.05)
+    ax_bot.set_ylim(0, BREAK_LOW)
+
+    ax_top.spines["bottom"].set_visible(False)
+    ax_bot.spines["top"].set_visible(False)
+    ax_top.tick_params(bottom=False)
+
+    # break 사선 표시
+    d = 0.015
+    kwargs = dict(transform=ax_top.transAxes, color="k", clip_on=False, linewidth=1)
+    ax_top.plot((-d, +d), (-d, +d), **kwargs)
+    ax_top.plot((1 - d, 1 + d), (-d, +d), **kwargs)
+    kwargs.update(transform=ax_bot.transAxes)
+    ax_bot.plot((-d, +d), (1 - d, 1 + d), **kwargs)
+    ax_bot.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+
+    ax_top.grid(True, linestyle="--", alpha=0.6)
+    ax_bot.grid(True, linestyle="--", alpha=0.6)
+
+    ax_bot.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    ax_bot.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     plt.xticks(rotation=45, ha="right")
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend(title="Programming Languages", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    ax_bot.set_xlabel("Timeline (Year-Month)", fontsize=12)
+    fig.text(0.04, 0.5, "Total Commits", va="center", rotation="vertical", fontsize=12)
+    fig.suptitle("Commit Trend by Language (2022 - 2026)", fontsize=14, y=1.01)
+
+    handles, labels = ax_bot.get_legend_handles_labels()
+    ax_top.legend(handles, labels, title="Programming Languages", bbox_to_anchor=(1.05, 1), loc='upper left')
+
     plt.tight_layout()
-    plt.savefig(output_image_path1)
+    plt.savefig(output_image_path1, bbox_inches="tight")
     plt.close()
     print(f"[Chart 1] Saved: {output_image_path1}")
 
