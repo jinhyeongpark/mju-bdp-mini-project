@@ -1,58 +1,84 @@
-# 🗂️ Data Source & Schema Definition
+# Data Directory
 
-본 디렉토리는 **GH Archive**로부터 수집된 오픈소스 타임라인 Raw 데이터의 출처, 샘플링 전략, 그리고 역사적 스키마 변경점(Schema Evolution)을 정의합니다. 
-*주의: 대용량의 raw 데이터 파일(`*.json.gz`, `*.json`)은 프로젝트 루트의 `.gitignore` 설정에 의해 원격 저장소(GitHub) 커밋 대상에서 강제 제외됩니다.*
-
----
-
-## 1. 데이터 출처 및 수집 전략 (Data Source & Sampling)
-
-* **데이터 출처:** GH Archive ([data.gharchive.org](https://data.gharchive.org/))
-* **데이터 성격:** GitHub API 공식 이벤트 스트림 아카이브 (매시간 단위 압축 백업)
-* **샘플링 전략:** * **기간:** 2022년 1월 ~ 2026년 5월 (총 50여 개월)
-    * **주기:** 매월 2일 15:00 UTC (한국 시간 기준 3일 자정)
-    * **이유:** 신년/연휴 및 매월 초에 발생하는 개발 활동량의 노이즈(이상치)를 회피하고 트렌드의 일관성을 확보하기 위해 '2회차 일자' 데이터를 고정 샘플링함.
+대용량 raw 데이터(`*.json.gz`)와 중간 산출물은 `.gitignore`에 의해 커밋 대상에서 제외됩니다.
 
 ---
 
-## 2. 깃허브 API 변경에 따른 스키마 이원화 (Schema Evolution)
+## 데이터 소스
 
-본 프로젝트가 타겟으로 삼는 `PushEvent`는 **2025년 10월 7일 GitHub 본사의 Events API 경량화 패치**를 기점으로 데이터 구조가 완전히 이원화되었습니다. 분석 파이프라인(Spark ETL) 설계 시 이 점을 반드시 반영해야 합니다.
+### GH Archive
 
-| 파싱 필드 경로 | 2025년 9월 이전 (황금기 데이터) | 2025년 10월 이후 ~ 2026년 현재 |
-| :--- | :--- | :--- |
-| `$.type` | `PushEvent` (정상 식별) | `PushEvent` (정상 식별) |
-| `$.repo.name` | `owner/repo` (존재) | `owner/repo` (존재) |
-| `$.payload.head` | `9b6500e...` (최신 커밋 SHA) | `202c546...` (최신 커밋 SHA) |
-| **`$.payload.commits`** | **있음 (배열 구조)** <br>└─ `message`, `author.email` 포함 | **없음 (필드 유실)** <br>└─ 데이터 다이어트로 전격 삭제됨 |
+- **출처**: [data.gharchive.org](https://data.gharchive.org/)
+- **수집 기간**: 2022년 1월 ~ 2026년 5월 (50개월)
+- **샘플링**: 매월 2일 15:00 UTC 고정 — 신년·연휴 노이즈 회피 목적
+- **사용 이벤트**: `PushEvent`
+- **수집 스크립트**: `src/ingest/collect_gharchive.py`
+
+**PushEvent 주요 필드**
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `id` | String | 이벤트 고유 ID |
+| `repo.name` | String | `owner/repo` 형식, GitHub API 연동 키 |
+| `payload.head` | String | 최신 커밋 SHA |
+| `created_at` | String | ISO 8601 타임스탬프, Hive 집계 시 year/month 추출 기준 |
+
+**스키마 변경 이력**: 2025년 10월 GitHub Events API 경량화 이후 `payload.commits` 배열 제거됨
+
+| 필드 | ~2025년 9월 | 2025년 10월~ |
+|------|------------|-------------|
+| `payload.commits[].message` | 존재 | **제거됨** |
+| `payload.commits[].author.email` | 존재 | **제거됨** |
+
+→ 커밋 메시지·이메일은 `payload.head` SHA로 GitHub API를 통해 별도 수집 (`src/ingest/fetch_metadata.py`)
 
 ---
 
-## 3. 핵심 필드 상세 스키마 (Target Field Specification)
+### GitHub REST API
 
-Spark 파이프라인에서 추출 및 정제하여 Hive 데이터 웨어하우스로 적재할 핵심 스키마 정의입니다.
+**커밋 메타데이터 수집** (`src/ingest/fetch_metadata.py`)
 
-### 1) 공통 메타데이터 (Common Execution Layer)
-* **`id`** (String): 이벤트 고유 ID (예: `"19549810927"`)
-* **`type`** (String): 이벤트 타입. 파이프라인 가동 시 `PushEvent`만 필터링하는 1차 인덱스로 활용.
-* **`repo.name`** (String): `가장 핵심적인 결합 Key`. 중복 제거(Dedup) 후 주 언어(Language) 정보를 획득하기 위해 GitHub REST API 호출 시 사용.
-* **`created_at`** (String): 이벤트 생성 타임스탬프 (ISO 8601 포맷: `YYYY-MM-DDTHH:MM:SSZ`). Hive 데이터 웨어하우스의 `year`, `month` 파티션 분할 기준으로 사용.
+- `GET /repos/{owner}/{repo}/commits/{sha}` → 커밋 메시지, author email
+- `GET /repos/{owner}/{repo}` → primary_language
+- GH Archive PushEvent의 `repo.name` + `payload.head` 를 키로 사용
 
-### 2) 페이로드 데이터 (Payload Content Layer)
-* **`payload.head`** (String): 해당 푸시 이벤트의 최신 커밋 SHA 해시값. **2025년 10월 이후 데이터 복원을 위한 필수 식별자**이며, GitHub REST API 커밋 조회 엔드포인트(`GET /repos/{owner}/{repo}/commits/{head_sha}`)와 연동됨.
-* **`payload.commits`** (Array[Object] / *2025년 9월 이전 한정*):
-    * `commits[*].message` (String): 커밋 메시지 본문. AI 에이전트의 흔적인 정규표현식 컨벤션(`chore(claude):` 등) 및 트레일러 탐지 대상.
-    * `commits[*].author.email` (String): 개발자 이메일. `noreply@anthropic.com` 등 AI 도메인 직접 매칭용.
+**AI 레포 언어 수집** (`src/analyze/fetch_repo_languages.py`)
+
+- `GET /repos/{owner}/{repo}/languages` → 언어별 바이트 수 반환
+- TARGET_LANGUAGES 중 바이트 수 1위 언어를 primary_language로 확정
+- 대상: `ai_repos_raw.csv` 5,000건
 
 ---
 
-## 4. 데이터 적재 디렉토리 구조 (Local Pipeline Directory)
+### BigQuery (`githubarchive.month.*`)
 
-```text
+- `PullRequestEvent` 페이로드에서 AI 관련 키워드 포함 레포를 집계
+- 키워드: `claude`, `copilot`, `gpt`, `openai`, `anthropic`, `gemini`, `codex`
+- BigQuery 콘솔에서 직접 실행 (약 500GB 스캔), 결과를 `ai_repos_raw.csv`로 저장
+- 컬럼: `repo_name`, `ai_pr_count`
+
+---
+
+## TARGET_LANGUAGES
+
+두 파이프라인 모두 아래 14개 언어 기준으로 필터링합니다.
+
+```
+Python, JavaScript, TypeScript, Java, Go,
+C#, Kotlin, Swift, PHP, Shell,
+Ruby, Rust, C++, Dart
+```
+
+---
+
+## 디렉토리 구조
+
+```
 data/
-├── README.md               # [현재 파일] 데이터 사양서
-└── raw/                    # 수집 스크립트 실행 시 수집되는 공간 (.gitignore 대상)
-    ├── 2022-01-02-15.json.gz
-    ├── 2022-02-02-15.json.gz
-    └── ...
-    └── 2026-05
+├── README.md                    # 본 파일
+├── ai_repos_raw.csv             # BigQuery 추출 결과 (Git 추적)
+├── ai_repos_with_lang.csv       # 언어 수집 완료본 (Git 추적)
+├── raw/                         # GH Archive 원본 (.gitignore)
+├── processed/                   # Spark ETL 출력 (.gitignore)
+└── summary/                     # Hive 집계 결과 (.gitignore)
+```

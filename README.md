@@ -12,9 +12,9 @@ Claude, GitHub Copilot, ChatGPT 등 AI 코딩 에이전트의 급격한 보급�
 
 ### 핵심 질문
 
-1. **언어 점유율**: AI 에이전트가 가담한 레포지토리는 어떤 프로그래밍 언어를 주로 사용하는가?
-2. **시계열 추이**: 시간 흐름에 따라 주요 언어별 GitHub 커밋 수는 어떻게 변화하는가?
-3. **작업 유형 분포**: AI 에이전트는 주로 어떤 성격의 작업(기능 구현, 버그 수정, 리팩토링 등)에 투입되는가?
+1. **시계열 추이**: 시간 흐름에 따라 주요 언어별 GitHub 커밋 점유율은 어떻게 변화했는가?
+2. **AI 레포 언어 분포**: AI 에이전트가 가담한 레포지토리는 어떤 프로그래밍 언어를 주로 사용하는가?
+3. **활동량 vs AI 채택률**: 전체 GitHub 커밋 활동량이 많은 언어일수록 AI 도구도 많이 채택하는가?
 
 ### AI 에이전트 식별 전략
 
@@ -24,13 +24,13 @@ BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이
 
 ---
 
-## 2. 데이터 (Data Sources)
+## 2. 데이터 소스 (Data Sources)
 
 | 소스 | 내용 | 규모 |
 |------|------|------|
 | **GH Archive** (gharchive.org) | GitHub PushEvent 로그 (커밋 기록) | 2022–2026 월별 JSON |
 | **BigQuery** `githubarchive.month.*` | PullRequestEvent 페이로드 AI 키워드 검색 | 약 500GB 스캔 / 5,000건 추출 |
-| **GitHub REST API** | 레포지토리 기본 정보 (primary_language) | 5,000건 API 호출 |
+| **GitHub REST API** `/repos/{owner}/{repo}/languages` | 레포지토리 주요 언어 수집 | 두 파이프라인에서 각각 활용 |
 
 ---
 
@@ -49,44 +49,44 @@ BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이
 
 ---
 
-## 4. 구현 계획 (Pipeline)
+## 4. 파이프라인 (Pipeline)
+
+두 개의 독립 파이프라인이 Chart 3에서 교차 조인된다.
 
 ```
-[BigQuery]
-  PullRequestEvent 페이로드 AI 키워드 검색
-  → repo_name + ai_pr_count (5,000건 CSV)
+[Pipeline A] GH Archive + GitHub REST API
+──────────────────────────────────────────
+GH Archive (월별 PushEvent JSON)
+  + GitHub REST API (repo 기본정보 → primary_language)
         │
+        ▼ repo_name 기준 JOIN (Apache Spark)
         ▼
-[GitHub REST API]
-  레포별 primary_language 수집
-  → data/ai_repos_with_lang.csv
+HDFS 적재 → Hive 집계 (언어별·월별 total_commits)
         │
+        ▼ Sqoop
         ▼
-[HDFS]
-  ai_repos_with_lang.csv 업로드
+MySQL: ai_agent_lang_trends
+  → Chart 1 (언어 점유율 추이)
+  → Chart 4 (언어 성장 지수)
+
+
+[Pipeline B] BigQuery + GitHub REST API
+──────────────────────────────────────────
+BigQuery (PullRequestEvent AI 키워드 검색)
+  → ai_repos_raw.csv (AI 가담 레포 5,000건)
         │
+        ▼ GitHub REST API (언어 수집)
         ▼
-[GH Archive + Python]
-  월별 PushEvent JSON 수집 → 로컬 적재
-        │
-        ▼
-[Apache Spark]
-  JSON 파싱 + AI 키워드 필터링 + 메타데이터 조인
-  → HDFS (탭 구분자 CSV)
-        │
-        ▼
-[Apache Hive]
-  외부 테이블 생성 + 언어별·월별 집계
-        │
-        ▼
-[Apache Sqoop]
-  Hive 집계 결과 → MySQL 전송
-        │
-        ▼
-[Python Matplotlib]
-  차트 1: 언어별 월간 커밋 추이 (선 그래프)
-  차트 2: AI 가담 레포 언어 점유율 (파이 차트)
-  차트 3: AI 에이전트 작업 유형 분포 (막대 그래프)
+data/ai_repos_with_lang.csv
+  → Chart 2 (AI 레포 언어 분포 파이)
+
+
+[Cross-Pipeline JOIN] Chart 3
+──────────────────────────────
+MySQL.ai_agent_lang_trends (Pipeline A)
+  × ai_repos_with_lang.csv (Pipeline B)
+  → primary_language 기준 조인
+  → Chart 3 (활동량 vs AI 채택률 산점도)
 ```
 
 ---
@@ -103,20 +103,9 @@ GITHUB_API_KEY=ghp_xxxx
 pip install pandas requests python-dotenv pymysql matplotlib
 ```
 
-### GitHub API로 언어 수집
-
-```bash
-python src/analyze/fetch_repo_languages.py
-```
-
 ### 전체 파이프라인 실행 (HDP Sandbox)
 
 ```bash
-# Spark ETL
-export PYSPARK_PYTHON=/usr/bin/python3.6
-spark-submit --master local[*] src/pipeline/spark_etl.py
-
-# Hive → Sqoop → MySQL → 시각화
 bash infra/run_all.sh
 ```
 
@@ -124,9 +113,10 @@ bash infra/run_all.sh
 
 ## 6. 결과물
 
-| 파일 | 내용 |
-|------|------|
-| `data/ai_repos_with_lang.csv` | AI 가담 레포 5,000건 + 주요 언어 |
-| `data/ai_agent_lang_trend.png` | 언어별 커밋 추이 차트 |
-| `data/ai_agent_share_pie.png` | AI 레포 언어 점유율 파이 차트 |
-| `data/ai_agent_activity_vs_ai.png` | 언어별 커밋 활동량 vs AI 채택률 산점도 |
+| 파일 | 데이터 소스 | 내용 |
+|------|------------|------|
+| `data/ai_repos_with_lang.csv` | BigQuery + GitHub API | AI 가담 레포 5,000건 + 주요 언어 |
+| `data/ai_agent_lang_trend.png` | GH Archive + GitHub API (Pipeline A) | 언어별 월간 커밋 점유율 추이 |
+| `data/ai_agent_share_pie.png` | BigQuery + GitHub API (Pipeline B) | AI 레포 언어 점유율 파이 차트 |
+| `data/ai_agent_activity_vs_ai.png` | Pipeline A × Pipeline B (조인) | 언어별 활동량 vs AI 채택률 산점도 |
+| `data/ai_agent_lang_growth_index.png` | GH Archive + GitHub API (Pipeline A) | 언어별 커밋 점유율 성장 지수 |
