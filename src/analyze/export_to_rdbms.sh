@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 "
 
+mysql -h${DB_HOST} -u${DB_USER} -p${DB_PASS} -D${DB_NAME} -e "
+ALTER TABLE ${TABLE_NAME}
+  MODIFY COLUMN primary_language VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+"
+
 mysql -h${DB_HOST} -u${DB_USER} -p${DB_PASS} -D${DB_NAME} -e "TRUNCATE TABLE ${TABLE_NAME};"
 
 sed -i '/^$/d' ${LOCAL_DATA_DIR}/* 2>/dev/null || true
