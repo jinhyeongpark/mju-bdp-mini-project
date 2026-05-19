@@ -32,7 +32,7 @@ def extract_unique_targets(raw_files):
                 except Exception:
                     continue
 
-    print(f"유니크 레포지토리 {len(unique_targets)}개 추출 완료")
+    print(f"Extracted {len(unique_targets)} unique repos")
     return unique_targets
 
 def fetch_enrichment_data(repo_name, head_sha, repo_cache):
@@ -65,7 +65,7 @@ def fetch_enrichment_data(repo_name, head_sha, repo_cache):
 
         return result
     except Exception as e:
-        print(f"API 오류 ({repo_name}): {e}")
+        print(f"API error ({repo_name}): {e}")
         return None
 
 def build_metadata_master(raw_dir="./data/raw"):
@@ -79,16 +79,16 @@ def build_metadata_master(raw_dir="./data/raw"):
                 month_groups[yymm].append(os.path.join(raw_dir, fname))
 
     if not month_groups:
-        print("raw 데이터가 없습니다. 수집기를 먼저 실행하세요.")
+        print("No raw data. Run the collector first.")
         return
 
     for yymm, files in sorted(month_groups.items()):
         output_path = f"./data/metadata_master_{yymm}.json"
         if os.path.exists(output_path):
-            print(f"건너뜀 (이미 존재): {output_path}")
+            print(f"[SKIP] Already exists: {output_path}")
             continue
 
-        print(f"\n{yymm} 처리 중 (파일 {len(files)}개)")
+        print(f"\nProcessing {yymm} ({len(files)} files)")
         targets = extract_unique_targets(files)
         if not targets:
             continue
@@ -108,7 +108,7 @@ def build_metadata_master(raw_dir="./data/raw"):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(master_data, f, indent=2, ensure_ascii=False)
 
-        print(f"저장 완료: {output_path} ({len(master_data)}건, {time.time() - start_time:.1f}초)")
+        print(f"Saved: {output_path} ({len(master_data)} records, {time.time() - start_time:.1f}s)")
 
 if __name__ == "__main__":
     build_metadata_master()

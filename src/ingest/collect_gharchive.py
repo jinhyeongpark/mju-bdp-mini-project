@@ -24,10 +24,10 @@ def download_monthly_samples():
             output_path = os.path.join(target_dir, file_name)
 
             if os.path.exists(output_path):
-                print(f"[SKIP] 이미 존재하는 파일입니다: {file_name}")
+                print(f"[SKIP] Already exists: {file_name}")
                 continue
 
-            print(f"다운로드 중: {file_name}")
+            print(f"Downloading: {file_name}")
             try:
                 with requests.get(url, stream=True, timeout=30) as response:
                     if response.status_code == 200:
@@ -35,14 +35,14 @@ def download_monthly_samples():
                             for chunk in response.iter_content(chunk_size=1024 * 1024):
                                 if chunk:
                                     f.write(chunk)
-                        print(f"완료: {file_name}")
+                        print(f"Done: {file_name}")
                         time.sleep(0.5)
                     else:
-                        print(f"[WARN] 데이터를 찾을 수 없습니다 (HTTP {response.status_code}): {file_name}")
+                        print(f"[WARN] Not found (HTTP {response.status_code}): {file_name}")
             except Exception as e:
-                print(f"[ERROR] {file_name} 수집 중 장애 발생: {e}")
+                print(f"[ERROR] Failed to fetch {file_name}: {e}")
 
-    print("수집 완료")
+    print("Collection complete")
 
 if __name__ == "__main__":
     download_monthly_samples()
