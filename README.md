@@ -1,50 +1,132 @@
-# 깃허브 분석 기반 AI 에이전트 시대의 개발 영향 분석
+# AI 에이전트가 오픈소스 생태계에 미친 영향 분석
 
-본 프로젝트는 **명지대학교 빅데이터 프로그래밍(2026-1)** 기말 프로젝트로, AI 에이전트(Claude, Copilot, OpenClaw 등)의 등장이 오픈소스 생태계의 프로그래밍 언어 선택 및 개발 프로세스 환경에 미친 영향을 엔드투엔드(End-to-End) 빅데이터 파이프라인을 통해 입체적으로 분석합니다.
+**명지대학교 빅데이터프로그래밍(2026-1) 기말 프로젝트**
 
 ---
 
 ## 1. 문제 정의 (Problem Definition)
 
-### 분석 배경 및 핵심 질문
-AI 에이전트는 단순한 자동완성 도구를 넘어 개발자의 고유 영역이었던 아키텍처 설계와 대규모 리팩토링까지 수행하는 수준으로 진화했습니다. 본 프로젝트는 대용량 오픈소스 생태계 로그 데이터를 전수 조사하여 **'AI와의 협업'이 가속화된 시점의 3가지 핵심 질문**에 답하고자 합니다.
+### 분석 배경
 
-1. **시계열 추이 분석**: 시간이 흐름에 따라 주요 프로그래밍 언어별 AI 에이전트 커밋 비중은 어떻게 변화하고 있는가?
-2. **기술 스택 점유율 분석**: 전체 AI 가담 프로젝트 중 가장 압도적인 활용도를 보이는 프로그래밍 언어는 무엇인가?
-3. **AI 작업 성격 분석**: AI 에이전트는 주로 어떤 성격의 작업(기능 구현, 버그 수정, 리팩토링, 문서 작성)에 집중적으로 투입되고 있는가?
+Claude, GitHub Copilot, ChatGPT 등 AI 코딩 에이전트의 급격한 보급으로, AI가 실제 오픈소스 코드에 얼마나, 어떤 방식으로 개입하고 있는지 데이터로 검증할 필요가 생겼다.
 
-### AI 에이전트 식별 전략 (AI Identification)
-단순 작성자(Author) 이메일 기반 추적은 에이전트가 사용자의 로컬 Git 계정을 빌려 쓰는 경우 감지하지 못하는 한계가 있습니다. 이를 극복하기 위해 본 프로젝트는 다음과 같은 **다중 필터링 식별 전략**을 파이프라인에 주입합니다.
+### 핵심 질문
 
-* **Commit Trailer 추적**: 커밋 본문의 `Co-Authored-By: .* <noreply@anthropic.com>` 등의 메타데이터 추적
-* **Commit Scope 키워드 매칭**: 커밋 메시지 내부 및 작성자 이메일 도메인 내 `claude`, `copilot`, `codex`, `openclaw`, `anthropic` 매칭
+1. **언어 점유율**: AI 에이전트가 가담한 레포지토리는 어떤 프로그래밍 언어를 주로 사용하는가?
+2. **시계열 추이**: 시간 흐름에 따라 주요 언어별 GitHub 커밋 수는 어떻게 변화하는가?
+3. **작업 유형 분포**: AI 에이전트는 주로 어떤 성격의 작업(기능 구현, 버그 수정, 리팩토링 등)에 투입되는가?
+
+### AI 에이전트 식별 전략
+
+BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이로드 내 아래 키워드를 포함한 레포지토리를 AI 연관 레포로 분류한다.
+
+- PR 제목·본문·브랜치명 키워드: `claude`, `copilot`, `gpt`, `openai`, `anthropic`, `gemini`, `codex`
 
 ---
 
-## 2. 시스템 아키텍처 (System Architecture)
+## 2. 데이터 (Data Sources)
 
-데이터의 수집(Ingestion), 분산 처리(Processing), 데이터 웨어하우징(DW), 서비스 서빙(Serving), 시각화(Visualization) 계층이 유기적으로 연결된 자동화 데이터 파이프라인 아키텍처입니다.
+| 소스 | 내용 | 규모 |
+|------|------|------|
+| **GH Archive** (gharchive.org) | GitHub PushEvent 로그 (커밋 기록) | 2022–2026 월별 JSON |
+| **BigQuery** `githubarchive.month.*` | PullRequestEvent 페이로드 AI 키워드 검색 | 약 500GB 스캔 / 5,000건 추출 |
+| **GitHub REST API** | 레포지토리 기본 정보 (primary_language) | 5,000건 API 호출 |
 
-```text
-[ Data Source ]        GH Archive API (JSON 시계열 데이터 수집)
-      │
-      ▼
-[ Ingestion ]          Python / Bash 자동화 스크립트 기반 로컬 적재
-      │
-      ▼
-[   Storage   ]        HDFS (분산 파일 시스템 파일 업로드 / 로컬 백업)
-      │
-      ▼
-[ Processing  ]        Apache Spark (대용량 JSON 파싱 및 RegEx 기반 AI 식별)
-      │
-      ▼
-[ DW / Master ]        Apache Hive (OpenCSVSerde 파싱 최적화, CTE 기반 다차원 집계 연산)
-      │
-      ▼
-[ Data Transfer]       Apache Sqoop (HDFS 분산 통계 데이터를 RDBMS로 고속 전송)
-      │
-      ▼
-[ Serving DB  ]        MySQL RDBMS (Serving용 마스터 테이블 구축 - 복합 PK 설계)
-      │
-      ▼
-[Visualization]        Python (PyMySQL + Matplotlib를 활용한 3대 핵심 지표 차트 생성)
+---
+
+## 3. 기술 스택 (Tech Stack)
+
+| 계층 | 도구 |
+|------|------|
+| 데이터 수집 | Python (requests), GH Archive, GitHub API |
+| 빅데이터 쿼리 | Google BigQuery |
+| 분산 스토리지 | Apache HDFS (Hadoop) |
+| 분산 처리 | Apache Spark (PySpark) |
+| 데이터 웨어하우스 | Apache Hive (HQL) |
+| RDBMS 적재 | Apache Sqoop → MySQL |
+| 시각화 | Python (Matplotlib, PyMySQL) |
+| 인프라 | GCP VM, HDP Sandbox (Docker) |
+
+---
+
+## 4. 구현 계획 (Pipeline)
+
+```
+[BigQuery]
+  PullRequestEvent 페이로드 AI 키워드 검색
+  → repo_name + ai_pr_count (5,000건 CSV)
+        │
+        ▼
+[GitHub REST API]
+  레포별 primary_language 수집
+  → data/ai_repos_with_lang.csv
+        │
+        ▼
+[HDFS]
+  ai_repos_with_lang.csv 업로드
+        │
+        ▼
+[GH Archive + Python]
+  월별 PushEvent JSON 수집 → 로컬 적재
+        │
+        ▼
+[Apache Spark]
+  JSON 파싱 + AI 키워드 필터링 + 메타데이터 조인
+  → HDFS (탭 구분자 CSV)
+        │
+        ▼
+[Apache Hive]
+  외부 테이블 생성 + 언어별·월별 집계
+        │
+        ▼
+[Apache Sqoop]
+  Hive 집계 결과 → MySQL 전송
+        │
+        ▼
+[Python Matplotlib]
+  차트 1: 언어별 월간 커밋 추이 (선 그래프)
+  차트 2: AI 가담 레포 언어 점유율 (파이 차트)
+  차트 3: AI 에이전트 작업 유형 분포 (막대 그래프)
+```
+
+---
+
+## 5. 실행 방법
+
+### 사전 준비
+
+```bash
+# GitHub API 토큰 설정 (.env 파일)
+GITHUB_API_KEY=ghp_xxxx
+
+# Python 의존성
+pip install pandas requests python-dotenv pymysql matplotlib
+```
+
+### GitHub API로 언어 수집
+
+```bash
+python src/analyze/fetch_repo_languages.py
+```
+
+### 전체 파이프라인 실행 (HDP Sandbox)
+
+```bash
+# Spark ETL
+export PYSPARK_PYTHON=/usr/bin/python3.6
+spark-submit --master local[*] src/pipeline/spark_etl.py
+
+# Hive → Sqoop → MySQL → 시각화
+bash infra/run_all.sh
+```
+
+---
+
+## 6. 결과물
+
+| 파일 | 내용 |
+|------|------|
+| `data/ai_repos_with_lang.csv` | AI 가담 레포 5,000건 + 주요 언어 |
+| `data/ai_agent_lang_trend.png` | 언어별 커밋 추이 차트 |
+| `data/ai_agent_share_pie.png` | AI 레포 언어 점유율 파이 차트 |
+| `data/ai_agent_task_type.png` | 작업 유형 분포 막대 차트 |

@@ -35,16 +35,19 @@ def generate_trend_charts():
     df = df.sort_values(by=["date", "primary_language"])
     os.makedirs("./data", exist_ok=True)
 
-    plt.figure(figsize=(12, 6))
+    all_dates = sorted(df["date"].unique())
+    tick_dates = all_dates[::6]  # 6개월 간격으로 샘플링
+
+    plt.figure(figsize=(14, 6))
     languages = df["primary_language"].unique()
     for lang in languages:
-        lang_df = df[df["primary_language"] == lang]
-        plt.plot(lang_df["date"], lang_df["ai_ratio"], marker="o", label=lang, linewidth=2)
-    plt.title("AI Agent Commit Ratio Trend by Language (2022 - 2026)", fontsize=14, pad=15)
+        lang_df = df[df["primary_language"] == lang].sort_values("date")
+        plt.plot(lang_df["date"], lang_df["total_commits"], marker="o", label=lang, linewidth=2, markersize=4)
+    plt.title("Commit Trend by Language (2022 - 2026)", fontsize=14, pad=15)
     plt.xlabel("Timeline (Year-Month)", fontsize=12)
-    plt.ylabel("AI Commit Ratio (%)", fontsize=12)
+    plt.ylabel("Total Commits", fontsize=12)
+    plt.xticks(ticks=tick_dates, labels=tick_dates, rotation=45, ha="right")
     plt.grid(True, linestyle="--", alpha=0.6)
-    plt.xticks(rotation=45)
     plt.legend(title="Programming Languages", bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     plt.savefig(output_image_path1)
@@ -52,11 +55,12 @@ def generate_trend_charts():
     print(f"[시각화 1] 완료: {output_image_path1}")
 
     plt.figure(figsize=(8, 8))
-    lang_summary = df.groupby("primary_language")["ai_commits"].sum().reset_index()
-    lang_summary = lang_summary[lang_summary["ai_commits"] > 0]
+    lang_csv = pd.read_csv("./data/ai_repos_with_lang.csv")
+    lang_summary = lang_csv.groupby("primary_language")["ai_pr_count"].sum().reset_index()
+    lang_summary = lang_summary[lang_summary["ai_pr_count"] > 0]
     if not lang_summary.empty:
-        plt.pie(lang_summary["ai_commits"], labels=lang_summary["primary_language"], autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
-        plt.title("Overall AI Agent Commits Share by Language", fontsize=14, pad=15)
+        plt.pie(lang_summary["ai_pr_count"], labels=lang_summary["primary_language"], autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
+        plt.title("AI Repository Language Distribution (GitHub API)", fontsize=14, pad=15)
         plt.tight_layout()
         plt.savefig(output_image_path2)
         plt.close()
