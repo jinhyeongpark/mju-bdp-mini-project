@@ -8,11 +8,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS default.github_enriched (
     author_email STRING,
     primary_language STRING
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-   "separatorChar" = ",",
-   "quoteChar"     = "\""
-)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
 STORED AS TEXTFILE
 LOCATION '/user/maria_dev/processed';
 
