@@ -130,3 +130,4 @@ bash infra/run_all.sh
 | `data/ai_agent_lang_trend.png` | 언어별 커밋 추이 차트 |
 | `data/ai_agent_share_pie.png` | AI 레포 언어 점유율 파이 차트 |
 | `data/ai_agent_activity_vs_ai.png` | 언어별 커밋 활동량 vs AI 채택률 산점도 |
+| `data/ai_agent_lang_growth_index.png` | 언어별 커밋 점유율 성장 지수 차트 |
