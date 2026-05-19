@@ -49,7 +49,7 @@ sqoop export \
   --table "${TABLE_NAME}" \
   --columns "year,month,primary_language,total_commits,unique_repos,ai_commits,feat_commits,fix_commits,refactor_commits,docs_commits,chore_commits" \
   --export-dir "${HDFS_TEMP_DIR}" \
-  --input-fields-terminated-by ',' \
+  --input-fields-terminated-by '\t' \
   --input-lines-terminated-by '\n' \
   --num-mappers 1
 
