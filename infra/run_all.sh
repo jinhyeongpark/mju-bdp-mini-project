@@ -74,7 +74,7 @@ chmod +x src/analyze/export_to_rdbms.sh
 
 # 6. 최종 데이터 시각화 차트 생성 - 로컬 summary 읽기
 echo "Generating trend visualization chart..."
-pip3.6 install pymysql --quiet 2>/dev/null || true
-python3.6 src/analyze/plot_trends.py
+python3.6 -m pip install pymysql --quiet 2>/dev/null || true
+PYTHONIOENCODING=utf-8 python3.6 src/analyze/plot_trends.py
 
 echo "Pipeline process completed successfully."
