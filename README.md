@@ -129,4 +129,4 @@ bash infra/run_all.sh
 | `data/ai_repos_with_lang.csv` | AI 가담 레포 5,000건 + 주요 언어 |
 | `data/ai_agent_lang_trend.png` | 언어별 커밋 추이 차트 |
 | `data/ai_agent_share_pie.png` | AI 레포 언어 점유율 파이 차트 |
-| `data/ai_agent_task_type.png` | 작업 유형 분포 막대 차트 |
+| `data/ai_agent_activity_vs_ai.png` | 언어별 커밋 활동량 vs AI 채택률 산점도 |
