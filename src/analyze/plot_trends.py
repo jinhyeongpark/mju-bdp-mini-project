@@ -54,13 +54,22 @@ def generate_trend_charts():
     plt.close()
     print(f"[시각화 1] 완료: {output_image_path1}")
 
-    plt.figure(figsize=(8, 8))
     lang_csv = pd.read_csv("./data/ai_repos_with_lang.csv")
     lang_summary = lang_csv.groupby("primary_language")["ai_pr_count"].sum().reset_index()
     lang_summary = lang_summary[lang_summary["ai_pr_count"] > 0]
+    lang_summary = lang_summary.sort_values("ai_pr_count", ascending=False).reset_index(drop=True)
     if not lang_summary.empty:
-        plt.pie(lang_summary["ai_pr_count"], labels=lang_summary["primary_language"], autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
-        plt.title("AI Repository Language Distribution (GitHub API)", fontsize=14, pad=15)
+        TOP_N_LANG = 8
+        top = lang_summary.head(TOP_N_LANG).copy()
+        others_sum = lang_summary.iloc[TOP_N_LANG:]["ai_pr_count"].sum()
+        if others_sum > 0:
+            top = pd.concat([top, pd.DataFrame([{"primary_language": "Others", "ai_pr_count": others_sum}])], ignore_index=True)
+        total = top["ai_pr_count"].sum()
+        legend_labels = [f"{row.primary_language} ({row.ai_pr_count / total * 100:.1f}%)" for _, row in top.iterrows()]
+        fig, ax = plt.subplots(figsize=(10, 8))
+        wedges, _ = ax.pie(top["ai_pr_count"], startangle=90, colors=plt.cm.Paired.colors[:len(top)])
+        ax.legend(wedges, legend_labels, title="Language (Share)", loc="center left", bbox_to_anchor=(1, 0.5), fontsize=10)
+        ax.set_title("AI Repository Language Distribution (GitHub API)", fontsize=14, pad=15)
         plt.tight_layout()
         plt.savefig(output_image_path2)
         plt.close()
