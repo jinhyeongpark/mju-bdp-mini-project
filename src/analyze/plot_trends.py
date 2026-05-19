@@ -8,6 +8,7 @@ def generate_trend_charts():
     output_image_path1 = "./data/ai_agent_lang_trend.png"
     output_image_path2 = "./data/ai_agent_share_pie.png"
     output_image_path3 = "./data/ai_agent_activity_vs_ai.png"
+    output_image_path4 = "./data/ai_agent_lang_growth_index.png"
 
     db_host = "localhost"
     db_user = "root"
@@ -114,6 +115,34 @@ def generate_trend_charts():
         print(f"[Chart 3] Saved: {output_image_path3}")
     else:
         print("[Chart 3] No overlapping languages between datasets. Skipping.")
+
+    # --- Chart 4: Language growth index (base = first available month = 100) ---
+    pivot = monthly.pivot(index="date", columns="primary_language", values="share").sort_index()
+    # Use languages that appear in the top 8 of Chart 1
+    pivot = pivot[top_langs]
+    # Divide each column by its first non-null value to get growth index
+    base = pivot.apply(lambda col: col.dropna().iloc[0] if col.dropna().size > 0 else 1)
+    index_df = (pivot / base * 100).dropna(how="all")
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    for lang in top_langs:
+        if lang in index_df.columns:
+            series = index_df[lang].dropna()
+            ax.plot(series.index, series.values, marker="o", label=lang, linewidth=2, markersize=4)
+
+    ax.axhline(100, color="gray", linestyle="--", linewidth=1, alpha=0.7)
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    plt.xticks(rotation=45, ha="right")
+    ax.set_xlabel("Timeline (Year-Month)", fontsize=12)
+    ax.set_ylabel("Growth Index (Base = 100 at first month)", fontsize=12)
+    ax.set_title("Language Commit Share Growth Index (2022 - 2026)", fontsize=14)
+    ax.legend(title="Language", bbox_to_anchor=(1.01, 1), loc='upper left')
+    ax.grid(True, linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(output_image_path4, bbox_inches="tight")
+    plt.close()
+    print(f"[Chart 4] Saved: {output_image_path4}")
 
 if __name__ == "__main__":
     generate_trend_charts()
