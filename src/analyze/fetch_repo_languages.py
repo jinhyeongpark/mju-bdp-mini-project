@@ -35,7 +35,7 @@ def fetch_language(repo_name):
 
 def main():
     df = pd.read_csv(INPUT_CSV).head(TOP_N)
-    print(f"총 {len(df)}개 레포 처리 시작...")
+    print(f"Processing {len(df)} repos...")
 
     results = {}
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -47,12 +47,12 @@ def main():
             i = futures[future]
             results[i] = future.result()
             if i % 200 == 0:
-                print(f"[{i}/{len(df)}] 처리 중...")
+                print(f"[{i}/{len(df)}] done")
 
     df["primary_language"] = [results[i] for i in range(1, len(df) + 1)]
     os.makedirs("./data", exist_ok=True)
     df.to_csv(OUTPUT_CSV, index=False)
-    print(f"\n완료: {OUTPUT_CSV}")
+    print(f"\nSaved: {OUTPUT_CSV}")
 
 if __name__ == "__main__":
     main()
