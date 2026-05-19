@@ -1,4 +1,6 @@
-CREATE EXTERNAL TABLE IF NOT EXISTS default.github_enriched (
+DROP TABLE IF EXISTS default.github_enriched;
+
+CREATE EXTERNAL TABLE default.github_enriched (
     repo_name STRING,
     event_id STRING,
     event_type STRING,
@@ -11,7 +13,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS default.github_enriched (
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY '\t'
 STORED AS TEXTFILE
-LOCATION '/user/maria_dev/processed';
+LOCATION '/user/maria_dev/processed'
+TBLPROPERTIES ('skip.header.line.count'='1');
 
 WITH ai_classified_commits AS (
     SELECT
