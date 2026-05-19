@@ -30,6 +30,11 @@ def generate_trend_charts():
     if df.empty:
         raise ValueError(f"에러: MySQL {table_name} 테이블에 데이터가 없습니다.")
 
+    TARGET_LANGUAGES = {"Python", "JavaScript", "TypeScript", "Java", "Go",
+                        "C#", "Kotlin", "Swift", "PHP", "Shell",
+                        "Ruby", "Rust", "C++", "Dart"}
+    df = df[df["primary_language"].isin(TARGET_LANGUAGES)]
+
     df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
     df["ai_ratio"] = (df["ai_commits"] / df["total_commits"]) * 100
     df = df.sort_values(by=["date", "primary_language"])
