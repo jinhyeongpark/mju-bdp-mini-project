@@ -42,7 +42,7 @@ WITH ai_classified_commits AS (
 )
 INSERT OVERWRITE DIRECTORY '/tmp/ai_project_summary'
 ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
+FIELDS TERMINATED BY '\t'
 SELECT 
     year,
     month,
