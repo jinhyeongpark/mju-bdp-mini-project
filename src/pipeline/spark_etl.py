@@ -73,7 +73,7 @@ def run_spark_etl():
 
     try:
         print(f"결과 저장 중: {output_path}")
-        enriched_df.write.mode("overwrite").csv(output_path, header=True)
+        enriched_df.write.mode("overwrite").csv(output_path, header=True, sep='\t')
         print("저장 완료")
     except Exception as e:
         print(f"파일 저장 실패: {e}")
