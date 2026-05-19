@@ -18,20 +18,50 @@ INPUT_CSV = "./data/ai_repos_raw.csv"
 OUTPUT_CSV = "./data/ai_repos_with_lang.csv"
 TOP_N = 5000
 
+TARGET_LANGUAGES = {
+    "Python", "JavaScript", "TypeScript", "Java", "Go",
+    "C#", "Kotlin", "Swift", "PHP", "Shell",
+    "Ruby", "Rust", "C++", "Dart"
+}
+
+def get_languages_breakdown(repo_name):
+    """레포의 전체 언어 목록을 바이트 수와 함께 반환."""
+    url = f"https://api.github.com/repos/{repo_name}/languages"
+    for _ in range(3):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=10)
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 429:
+                time.sleep(60)
+                continue
+            return {}
+        except Exception:
+            return {}
+    return {}
+
 def fetch_language(repo_name):
     url = f"https://api.github.com/repos/{repo_name}"
     for _ in range(3):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=10)
             if resp.status_code == 200:
-                return resp.json().get("language") or "Unknown"
+                primary = resp.json().get("language") or ""
+                if primary in TARGET_LANGUAGES:
+                    return primary
+                # primary가 목표 언어가 아니면 전체 언어 분포에서 찾기
+                breakdown = get_languages_breakdown(repo_name)
+                for lang, _ in sorted(breakdown.items(), key=lambda x: x[1], reverse=True):
+                    if lang in TARGET_LANGUAGES:
+                        return lang
+                return "Other"
             if resp.status_code == 429:
                 time.sleep(60)
                 continue
-            return "Unknown"
+            return "Other"
         except Exception:
-            return "Unknown"
-    return "Unknown"
+            return "Other"
+    return "Other"
 
 def main():
     df = pd.read_csv(INPUT_CSV).head(TOP_N)
