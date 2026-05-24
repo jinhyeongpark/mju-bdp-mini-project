@@ -50,12 +50,16 @@
 
 ---
 
-### BigQuery (`githubarchive.month.*`)
+### GH Archive — PullRequestEvent (Pipeline B)
 
-- `PullRequestEvent` 페이로드에서 AI 관련 키워드 포함 레포를 집계
-- 키워드: `claude`, `copilot`, `gpt`, `openai`, `anthropic`, `gemini`, `codex`
-- BigQuery 콘솔에서 직접 실행 (약 500GB 스캔), 결과를 `ai_repos_raw.csv`로 저장
-- 컬럼: `repo_name`, `ai_pr_count`
+- **출처**: [data.gharchive.org](https://data.gharchive.org/)
+- **수집 기간**: 2025년 12월 ~ 2026년 5월
+- **샘플링**: 매월 2일·9일·16일·23일 15:00 UTC (월 4파일)
+- **사용 이벤트**: `PullRequestEvent`
+- **수집 스크립트**: `src/ingest/collect_ai_pr_raw.py`
+- **Spark 처리**: `src/pipeline/spark_ai_pr_etl.py` — AI 키워드 필터링 후 `ai_repos_raw.csv` 생성
+- **키워드**: `claude`, `copilot`, `gpt`, `openai`, `anthropic`, `gemini`, `codex`
+- **출력 컬럼**: `repo_name`, `ai_pr_count`
 
 ---
 
@@ -78,7 +82,8 @@ data/
 ├── README.md                    # 본 파일
 ├── ai_repos_raw.csv             # BigQuery 추출 결과 (Git 추적)
 ├── ai_repos_with_lang.csv       # 언어 수집 완료본 (Git 추적)
-├── raw/                         # GH Archive 원본 (.gitignore)
+├── raw/                         # GH Archive PushEvent 원본 (.gitignore)
+├── raw_pr/                      # GH Archive PullRequestEvent 원본 (.gitignore)
 ├── processed/                   # Spark ETL 출력 (.gitignore)
 └── summary/                     # Hive 집계 결과 (.gitignore)
 ```

@@ -9,75 +9,92 @@ export PYTHONIOENCODING=utf-8
 
 echo "Starting data pipeline process..."
 
-# 1. Raw 데이터 수집 (GH Archive) - 로컬 적재
-# echo "Executing data ingestion..."
-# python3.6 src/ingest/collect_gharchive.py
+# 0. Pipeline B - GH Archive PR 데이터 수집 (raw_pr/)
+echo "Downloading GH Archive PR raw files..."
+python3.6 src/ingest/collect_ai_pr_raw.py
 
-# 2. 외부 메타데이터 보강 (GitHub REST API) - 로컬 적재
-# echo "Executing metadata enrichment..."
-# python3.6 src/ingest/fetch_metadata.py
+# 0-1. Pipeline B - Spark로 AI 키워드 PR 추출 → ai_repos_raw.csv
+echo "Extracting AI repos from PR data via Spark..."
+export PYSPARK_PYTHON=/usr/bin/python3.6
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
+spark-submit --master local[*] src/pipeline/spark_ai_pr_etl.py
 
-# 3. 분산 정제 및 조인 (Apache Spark Job) - 로컬 읽기 / 로컬 쓰기
-# echo "Executing Spark ETL processing via spark-submit..."
+# 1. Raw 데이터 수집 (GH Archive) - 파일별 SKIP 로직 내장
+echo "Collecting GH Archive raw data..."
+python3.6 src/ingest/collect_gharchive.py
 
-# export PYSPARK_PYTHON=/usr/bin/python3.6
-# export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
+# 2. 외부 메타데이터 보강 (GitHub REST API) - 월별 SKIP 로직 내장
+echo "Enriching metadata via GitHub API..."
+python3.6 src/ingest/fetch_metadata.py
 
-# spark-submit --master local[*] src/pipeline/spark_etl.py
+# 3. 분산 정제 및 조인 (Apache Spark Job) - processed/ 존재 시 SKIP
+export PYSPARK_PYTHON=/usr/bin/python3.6
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
+
+if [ -z "$(ls -A ./data/processed/ 2>/dev/null)" ]; then
+    echo "Executing Spark ETL processing..."
+    spark-submit --master local[*] src/pipeline/spark_etl.py
+else
+    echo "[SKIP] Spark ETL: data/processed/ already exists."
+fi
 
 # 4. HDFS 데이터 적재 (스파크 정제 결과물을 하둡으로 업로드)
-echo "Checking HDFS environment and uploading processed data..."
 if command -v hdfs &> /dev/null
 then
-    echo "HDFS detected. Verifying processed data..."
-    
-    # 정제 결과 폴더가 비어있거나 존재하지 않는지 체크
     if [ -z "$(ls -A ./data/processed/ 2>/dev/null)" ]; then
         echo "Error: No processed data found in ./data/processed/. Spark ETL may have skipped writing."
         exit 1
     fi
-    
-    echo "Uploading data to HDFS..."
-    hdfs dfs -mkdir -p /user/maria_dev/processed
-    hdfs dfs -put -f ./data/processed/* /user/maria_dev/processed/
-    echo "HDFS data upload completed."
+
+    if hdfs dfs -test -e /user/maria_dev/processed 2>/dev/null; then
+        echo "[SKIP] HDFS: /user/maria_dev/processed already exists."
+    else
+        echo "Uploading data to HDFS..."
+        hdfs dfs -mkdir -p /user/maria_dev/processed
+        hdfs dfs -put ./data/processed/* /user/maria_dev/processed/
+        echo "HDFS data upload completed."
+    fi
 else
     echo "Warning: Hadoop/HDFS command not found. Skipping HDFS upload (Local simulation mode)."
 fi
 
 # 5. 데이터 웨어하우스 적재 및 시계열 집계 (Apache Hive) - HDFS 데이터 읽기 / 로컬 summary 쓰기
-echo "Executing Hive analysis..."
-
-if command -v hdfs &> /dev/null
-then
-    hdfs dfs -chmod -R 777 /user/maria_dev/processed
-    # 멱등성 보장을 위해 이전 하이브 임시 파일이 있다면 미리 삭제
-    hdfs dfs -rm -r -f /tmp/ai_project_summary || true
-fi
-
 if command -v hive &> /dev/null
 then
-    hive -f src/analyze/hive_analysis.hql
-    
-    # Hive가 HDFS /tmp에 안전하게 연산해 둔 결과물을 리눅스 로컬 프로젝트 폴더로 가로채기
-    echo "Downloading Hive results from HDFS to local data/summary directory..."
-    mkdir -p ./data/summary
-    rm -rf ./data/summary/*
-    hdfs dfs -get /tmp/ai_project_summary/* ./data/summary/
+    if [ -n "$(ls -A ./data/summary/ 2>/dev/null)" ]; then
+        echo "[SKIP] Hive: data/summary/ already exists."
+    else
+        echo "Executing Hive analysis..."
+        if command -v hdfs &> /dev/null; then
+            hdfs dfs -chmod -R 777 /user/maria_dev/processed
+            hdfs dfs -rm -r -f /tmp/ai_project_summary || true
+        fi
+        hive -f src/analyze/hive_analysis.hql
+        echo "Downloading Hive results from HDFS to local data/summary directory..."
+        mkdir -p ./data/summary
+        hdfs dfs -get /tmp/ai_project_summary/* ./data/summary/
+    fi
 else
     echo "Warning: Hive command not found. Skipping Hive execution."
 fi
 
-echo "Executing Sqoop pipeline to RDBMS..."
+# 6. Sqoop - MySQL에 데이터가 없을 때만 실행
 chmod +x src/analyze/export_to_rdbms.sh
-./src/analyze/export_to_rdbms.sh
+SQOOP_ROWS=$(mysql -hlocalhost -uroot -phadoop -Dmju_analytics \
+    -se "SELECT COUNT(*) FROM ai_agent_lang_trends;" 2>/dev/null || echo "0")
+if [ "$SQOOP_ROWS" -gt "0" ]; then
+    echo "[SKIP] Sqoop: MySQL table already has ${SQOOP_ROWS} rows."
+else
+    echo "Executing Sqoop pipeline to RDBMS..."
+    ./src/analyze/export_to_rdbms.sh
+fi
 
-# 6. GitHub API로 AI 레포 언어 수집 (차트 2용)
+# 7. GitHub API로 AI 레포 언어 수집 (차트 2용) - ai_repos_with_lang.csv 존재 시 SKIP
 echo "Fetching repository languages from GitHub API..."
 python3.6 src/analyze/fetch_repo_languages.py
 
-# 7. 최종 데이터 시각화 차트 생성 - 로컬 summary 읽기
-echo "Generating trend visualization chart..."
+# 8. 최종 데이터 시각화 차트 생성 - 차트 4종 모두 존재 시 SKIP
+echo "Generating trend visualization charts..."
 python3.6 -m pip install pymysql --quiet 2>/dev/null || true
 PYTHONIOENCODING=utf-8 python3.6 src/analyze/plot_trends.py
 
