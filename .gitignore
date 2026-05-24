@@ -2,8 +2,6 @@
 *.json
 *.json.gz
 *.csv
-!data/ai_repos_raw.csv
-!data/ai_repos_with_lang.csv
 
 # 파이썬 캐시 및 가상환경 제외
 __pycache__/
