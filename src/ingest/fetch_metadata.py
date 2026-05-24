@@ -3,6 +3,7 @@ import re
 import gzip
 import json
 import time
+import random
 import requests
 from collections import defaultdict
 from dotenv import load_dotenv
@@ -93,7 +94,7 @@ def build_metadata_master(raw_dir="./data/raw"):
         if not targets:
             continue
 
-        sample_targets = list(targets.items())[:50]
+        sample_targets = random.sample(list(targets.items()), min(100, len(targets)))
         master_data = []
         repo_cache = {}
         start_time = time.time()
