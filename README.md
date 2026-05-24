@@ -29,7 +29,7 @@ BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이
 | 소스 | 내용 | 규모 |
 |------|------|------|
 | **GH Archive** (gharchive.org) | GitHub PushEvent 로그 (커밋 기록) | 2022–2026 월별 JSON |
-| **BigQuery** `githubarchive.month.*` | PullRequestEvent 페이로드 AI 키워드 검색 | 약 500GB 스캔 / 5,000건 추출 |
+| **GH Archive** (gharchive.org) | GitHub PullRequestEvent 로그 (AI 키워드 검색) | 2025-12–2026-05 주 1회 샘플 |
 | **GitHub REST API** `/repos/{owner}/{repo}/languages` | 레포지토리 주요 언어 수집 | 두 파이프라인에서 각각 활용 |
 
 ---
@@ -39,7 +39,6 @@ BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이
 | 계층 | 도구 |
 |------|------|
 | 데이터 수집 | Python (requests), GH Archive, GitHub API |
-| 빅데이터 쿼리 | Google BigQuery |
 | 분산 스토리지 | Apache HDFS (Hadoop) |
 | 분산 처리 | Apache Spark (PySpark) |
 | 데이터 웨어하우스 | Apache Hive (HQL) |
@@ -70,10 +69,14 @@ MySQL: ai_agent_lang_trends
   → Chart 4 (언어 성장 지수)
 
 
-[Pipeline B] BigQuery + GitHub REST API
-──────────────────────────────────────────
-BigQuery (PullRequestEvent AI 키워드 검색)
-  → ai_repos_raw.csv (AI 가담 레포 5,000건)
+[Pipeline B] GH Archive + Spark + GitHub REST API
+──────────────────────────────────────────────────
+GH Archive (PullRequestEvent, 2025-12~2026-05)
+  → data/raw_pr/ 로컬 적재
+        │
+        ▼ Spark: PullRequestEvent 필터 + AI 키워드 매칭
+        ▼
+ai_repos_raw.csv (AI 가담 레포)
         │
         ▼ GitHub REST API (언어 수집)
         ▼
@@ -96,14 +99,16 @@ MySQL.ai_agent_lang_trends (Pipeline A)
 ### 사전 준비
 
 ```bash
-# GitHub API 토큰 설정 (.env 파일)
+# 1. .env 파일에 API 키 설정
 GITHUB_API_KEY=ghp_xxxx
 
-# Python 의존성
+# 2. Python 의존성
 pip install pandas requests python-dotenv pymysql matplotlib
 ```
 
-### 전체 파이프라인 실행 (HDP Sandbox)
+### Step 1. 전체 파이프라인 실행 (HDP Sandbox)
+
+> `data/ai_repos_raw.csv`가 이미 존재하면 GH Archive 수집·Spark 처리를 건너뛴다.
 
 ```bash
 bash infra/run_all.sh

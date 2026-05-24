@@ -88,7 +88,7 @@ def generate_trend_charts():
         plt.close()
         print(f"[Chart 2] Saved: {output_image_path2}")
 
-    # --- Chart 3: Scatter — commit activity (Hive/MySQL) vs AI adoption (BigQuery/GitHub API) ---
+    # --- Chart 3: Scatter — commit activity (Hive/MySQL) vs AI adoption (GH Archive/GitHub API) ---
     activity = df.groupby("primary_language")["total_commits"].sum().reset_index()
     activity.columns = ["primary_language", "total_commits"]
 
@@ -106,7 +106,7 @@ def generate_trend_charts():
                         xy=(row["total_commits"], row["ai_pr_count"]),
                         xytext=(5, 5), textcoords="offset points", fontsize=9)
         ax.set_xlabel("Total Commits — GH Archive (Hive Aggregated)", fontsize=11)
-        ax.set_ylabel("AI-related PR Count — BigQuery / GitHub API", fontsize=11)
+        ax.set_ylabel("AI-related PR Count — GH Archive / GitHub API", fontsize=11)
         ax.set_title("Language Activity vs AI Adoption", fontsize=14)
         ax.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
