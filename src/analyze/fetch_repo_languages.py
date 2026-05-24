@@ -44,6 +44,10 @@ def fetch_language(repo_name):
     return "Other"
 
 def main():
+    if os.path.exists(OUTPUT_CSV):
+        print(f"[SKIP] Already exists: {OUTPUT_CSV}")
+        return
+
     df = pd.read_csv(INPUT_CSV).head(TOP_N)
     print(f"Processing {len(df)} repos...")
 
