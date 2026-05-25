@@ -24,23 +24,17 @@ def run_spark_etl():
     spark = create_spark_session()
 
     raw_dir = "./data/raw"
-    # [수정] 결과 저장 경로를 HDFS가 아닌 로컬 절대 경로로 명시
     output_path = f"file://{os.path.abspath('./data/processed')}"
 
-    # 1. Raw 데이터 로드 구간 보정
-    # 수집 폴더 내 파일 존재 여부는 기존 로컬 glob으로 체크하되
     local_raw_files = glob.glob(os.path.join(raw_dir, "*.json.gz"))
     if not local_raw_files:
         print("No input data. Run the collector first.")
         spark.stop()
         return
 
-    # [수정] Spark 전용 네이티브 와일드카드 절대 경로 문자열 1줄로 생성
     raw_wildcard_path = f"file://{os.path.abspath(raw_dir)}/*.json.gz"
     print(f"Loading {len(local_raw_files)} compressed files from {raw_wildcard_path}...")
     raw_df = spark.read.json(raw_wildcard_path)
-
-    # 2. PushEvent 필터링
     push_df = raw_df.filter(col("type") == "PushEvent") \
                     .select(
                         col("id").alias("event_id"),
@@ -50,22 +44,20 @@ def run_spark_etl():
                         col("created_at")
                     )
 
-    # 3. 메타데이터 로드 구간 보정
     local_metadata_files = glob.glob("./data/metadata_master_*.json")
     if not local_metadata_files:
         print("No metadata files found. Using empty dataframe.")
         meta_df = spark.createDataFrame([], schema="repo_name STRING, head_sha STRING, commit_message STRING, author_email STRING, primary_language STRING")
     else:
-        # [수정] 메타데이터 로드도 Spark 전용 네이티브 와일드카드 절대 경로 문자열로 처리
         meta_wildcard_path = f"file://{os.path.abspath('./data')}/metadata_master_*.json"
         print(f"Loading metadata: {meta_wildcard_path}")
         meta_df = spark.read.option("multiLine", "true").json(meta_wildcard_path) \
                        .select("repo_name", "commit_message", "author_email", "primary_language")
 
-    # 4. JOIN
+    # JOIN
     enriched_df = push_df.join(meta_df, on="repo_name", how="left_outer")
 
-    # 5. 결과 확인 및 저장
+    # 결과 확인 및 저장
     try:
         enriched_df.filter(col("commit_message").isNotNull()).show(5, truncate=False)
     except Exception as e:
