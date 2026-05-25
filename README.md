@@ -18,7 +18,7 @@ Claude, GitHub Copilot, ChatGPT 등 AI 코딩 에이전트의 급격한 보급�
 
 ### AI 에이전트 식별 전략
 
-BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이로드 내 아래 키워드를 포함한 레포지토리를 AI 연관 레포로 분류한다.
+GH Archive의 `PullRequestEvent` 페이로드 내 아래 키워드를 포함한 레포지토리를 AI 연관 레포로 분류한다.
 
 - PR 제목·본문·브랜치명 키워드: `claude`, `copilot`, `gpt`, `openai`, `anthropic`, `gemini`, `codex`
 
@@ -28,9 +28,9 @@ BigQuery의 `githubarchive.month.*` 데이터셋에서 `PullRequestEvent` 페이
 
 | 소스 | 내용 | 규모 |
 |------|------|------|
-| **GH Archive** (gharchive.org) | GitHub PushEvent 로그 (커밋 기록) | 2022–2026 월별 JSON |
-| **GH Archive** (gharchive.org) | GitHub PullRequestEvent 로그 (AI 키워드 검색) | 2025-12–2026-05 주 1회 샘플 |
-| **GitHub REST API** `/repos/{owner}/{repo}/languages` | 레포지토리 주요 언어 수집 | 두 파이프라인에서 각각 활용 |
+| **GH Archive** (gharchive.org) | GitHub PushEvent 로그 (커밋 기록) | 53개 파일 / **4.5 GB** (2022–2026 월별, 각 1시간 스냅샷) |
+| **GH Archive** (gharchive.org) | GitHub PullRequestEvent 로그 (AI 키워드 검색) | 24개 파일 / **725 MB** (2025-12–2026-05 월 4회 샘플) |
+| **GitHub REST API** `/repos/{owner}/{repo}/languages` | 레포지토리 주요 언어 수집 | AI 레포 **5,000건** 전수 호출 (Pipeline B) / 월별 랜덤 100건 × 53개월 (Pipeline A) |
 
 ---
 
@@ -120,8 +120,15 @@ bash infra/run_all.sh
 
 | 파일 | 데이터 소스 | 내용 |
 |------|------------|------|
-| `data/ai_repos_with_lang.csv` | BigQuery + GitHub API | AI 가담 레포 5,000건 + 주요 언어 |
+| `data/ai_repos_with_lang.csv` | GH Archive + GitHub API (Pipeline B) | AI 가담 레포 5,000건 + 주요 언어 |
 | `data/ai_agent_lang_trend.png` | GH Archive + GitHub API (Pipeline A) | 언어별 월간 커밋 점유율 추이 |
-| `data/ai_agent_share_pie.png` | BigQuery + GitHub API (Pipeline B) | AI 레포 언어 점유율 파이 차트 |
+| `data/ai_agent_share_pie.png` | GH Archive + GitHub API (Pipeline B) | AI 레포 언어 점유율 파이 차트 |
 | `data/ai_agent_activity_vs_ai.png` | Pipeline A × Pipeline B (조인) | 언어별 활동량 vs AI 채택률 산점도 |
 | `data/ai_agent_lang_growth_index.png` | GH Archive + GitHub API (Pipeline A) | 언어별 커밋 점유율 성장 지수 |
+
+---
+
+## AI Tool Usage
+
+- Gemini 3.5 Flash: 주제 선정, 프로젝트 아키텍쳐 구조, 데이터셋 조사, 인사이트 도출 등
+- Claude 3.5 Sonnet (Claude Code): github 작업 자동화 (브랜치 생성 및 이동, PR 생성), 코드 디버깅(*.py, *.sh, *.hql)
