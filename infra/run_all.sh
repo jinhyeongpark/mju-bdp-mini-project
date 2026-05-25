@@ -9,25 +9,29 @@ export PYTHONIOENCODING=utf-8
 
 echo "Starting data pipeline process..."
 
-# 0. Pipeline B - GH Archive PR 데이터 수집 (raw_pr/)
+# 1. Pipeline B - GH Archive PR 데이터 수집 (raw_pr/)
 echo "Downloading GH Archive PR raw files..."
 python3.6 src/ingest/collect_ai_pr_raw.py
 
-# 0-1. Pipeline B - Spark로 AI 키워드 PR 추출 → ai_repos_raw.csv
+# 2. Pipeline B - Spark로 AI 키워드 PR 추출 → ai_repos_raw.csv
 echo "Extracting AI repos from PR data via Spark..."
 export PYSPARK_PYTHON=/usr/bin/python3.6
 export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
 spark-submit --master local[*] src/pipeline/spark_ai_pr_etl.py
 
-# 1. Raw 데이터 수집 (GH Archive) - 파일별 SKIP 로직 내장
+# 3. Pipeline B - GitHub API로 AI 레포 언어 수집 - ai_repos_with_lang.csv 존재 시 SKIP
+echo "Fetching repository languages from GitHub API..."
+python3.6 src/analyze/fetch_repo_languages.py
+
+# 4. Pipeline A - Raw 데이터 수집 (GH Archive) - 파일별 SKIP 로직 내장
 echo "Collecting GH Archive raw data..."
 python3.6 src/ingest/collect_gharchive.py
 
-# 2. 외부 메타데이터 보강 (GitHub REST API) - 월별 SKIP 로직 내장
+# 5. Pipeline A - 외부 메타데이터 보강 (GitHub REST API) - 월별 SKIP 로직 내장
 echo "Enriching metadata via GitHub API..."
 python3.6 src/ingest/fetch_metadata.py
 
-# 3. 분산 정제 및 조인 (Apache Spark Job) - processed/ 존재 시 SKIP
+# 6. Pipeline A - 분산 정제 및 조인 (Apache Spark Job) - processed/ 존재 시 SKIP
 export PYSPARK_PYTHON=/usr/bin/python3.6
 export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.6
 
@@ -38,7 +42,7 @@ else
     echo "[SKIP] Spark ETL: data/processed/ already exists."
 fi
 
-# 4. HDFS 데이터 적재 (스파크 정제 결과물을 하둡으로 업로드)
+# 7. Pipeline A - HDFS 데이터 적재 (스파크 정제 결과물을 하둡으로 업로드)
 if command -v hdfs &> /dev/null
 then
     if [ -z "$(ls -A ./data/processed/ 2>/dev/null)" ]; then
@@ -58,7 +62,7 @@ else
     echo "Warning: Hadoop/HDFS command not found. Skipping HDFS upload (Local simulation mode)."
 fi
 
-# 5. 데이터 웨어하우스 적재 및 시계열 집계 (Apache Hive) - HDFS 데이터 읽기 / 로컬 summary 쓰기
+# 8. Pipeline A - 데이터 웨어하우스 적재 및 시계열 집계 (Apache Hive)
 if command -v hive &> /dev/null
 then
     if [ -n "$(ls -A ./data/summary/ 2>/dev/null)" ]; then
@@ -78,7 +82,7 @@ else
     echo "Warning: Hive command not found. Skipping Hive execution."
 fi
 
-# 6. Sqoop - MySQL에 데이터가 없을 때만 실행
+# 9. Pipeline A - Sqoop → MySQL
 chmod +x src/analyze/export_to_rdbms.sh
 SQOOP_ROWS=$(mysql -hlocalhost -uroot -phadoop -Dmju_analytics \
     -se "SELECT COUNT(*) FROM ai_agent_lang_trends;" 2>/dev/null || echo "0")
@@ -89,11 +93,7 @@ else
     ./src/analyze/export_to_rdbms.sh
 fi
 
-# 7. GitHub API로 AI 레포 언어 수집 (차트 2용) - ai_repos_with_lang.csv 존재 시 SKIP
-echo "Fetching repository languages from GitHub API..."
-python3.6 src/analyze/fetch_repo_languages.py
-
-# 8. 최종 데이터 시각화 차트 생성 - 차트 4종 모두 존재 시 SKIP
+# 10. 최종 데이터 시각화 차트 생성 - 차트 4종 모두 존재 시 SKIP
 echo "Generating trend visualization charts..."
 python3.6 -m pip install pymysql --quiet 2>/dev/null || true
 PYTHONIOENCODING=utf-8 python3.6 src/analyze/plot_trends.py
